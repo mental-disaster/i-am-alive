@@ -13,45 +13,47 @@ animation_list = {
     "arrow" : ['>', '>>', '>>>']
 }
 
-mouse = Controller()
-
-is_working = True
-
-def loading_animation(animation="Spinner"):
+def loading_animation(stop_event, animation="spinner"):
     idx = 0
     selected_animation = animation_list[animation]
     max_length = max(len(frame) for frame in selected_animation)
 
-    while is_working:
+    while stop_event.is_set():
         frame = selected_animation[idx]
-        sys.stdout.write("\rWorking " + frame + " " * (max_length - len(frame)))
-        sys.stdout.flush()
+        print(f"\rWorking {frame}", end='', flush=True)
         idx = (idx + 1) % len(selected_animation)
         time.sleep(0.2)
 
-def move_mouse():
-    while is_working:
+def move_mouse(stop_event, interval):
+    mouse = Controller()
+    tick = 4
+
+    while stop_event.is_set():
         mouse.move(1, 0)
-        time.sleep(1)
         mouse.move(-1, 0)
 
-def stop_working():
-    global is_working
+        for _ in range(interval*tick):
+            if not stop_event.is_set():
+                return
+            time.sleep(1/tick)
+
+def stop_working(stop_event):
     input("Press Enter to stop the program...\n")
-    is_working = False
+    stop_event.clear()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--animation', help='Select working animation')
+    parser.add_argument('--animation', help='Select working animation', default="spinner", choices=animation_list.keys())
+    parser.add_argument('--interval', help='Mouse moving interval in seconds', type=int, default=10)
     opt = parser.parse_args()
 
-    animation = str(opt.animation).lower()
-    if not(animation and animation in animation_list.keys()):
-        animation = "spinner"
+    is_working = threading.Event()
+    is_working.set()
 
-    activation_thread = threading.Thread(target=stop_working)
-    animation_thread = threading.Thread(target=loading_animation, args=(animation,))
-    mouse_thread = threading.Thread(target=move_mouse)
+    activation_thread = threading.Thread(target=stop_working, args=(is_working,))
+    animation_thread = threading.Thread(target=loading_animation, args=(is_working, opt.animation,))
+    mouse_thread = threading.Thread(target=move_mouse, args=(is_working, opt.interval,))
+
     activation_thread.start()
     animation_thread.start()
     mouse_thread.start()
@@ -59,5 +61,5 @@ if __name__ == "__main__":
     activation_thread.join()
     animation_thread.join()
     mouse_thread.join()
-        
-    print("프로그램 종료")
+    
+    print("Jobs done...")
