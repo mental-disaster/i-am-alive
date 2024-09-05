@@ -16,10 +16,11 @@ animation_list = {
 def loading_animation(stop_event, animation):
     idx = 0
     selected_animation = animation_list[animation]
+    max_length = max(len(frame) for frame in selected_animation)
 
     while stop_event.is_set():
         frame = selected_animation[idx]
-        print(f"\rWorking {frame}", end='', flush=True)
+        print(f"\rWorking {frame}"+ " " * (max_length - len(frame)), end='', flush=True)
         idx = (idx + 1) % len(selected_animation)
         time.sleep(0.2)
 
