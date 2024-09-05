@@ -32,10 +32,10 @@ def move_mouse(stop_event, interval):
         mouse.move(1, 0)
         mouse.move(-1, 0)
 
-        for _ in range(interval*tick):
+        for _ in range(interval * tick):
             if not stop_event.is_set():
                 return
-            time.sleep(1/tick)
+            time.sleep(1 / tick)
 
 def stop_working(stop_event):
     input("Press Enter to stop the program...\n")
