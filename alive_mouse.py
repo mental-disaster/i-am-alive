@@ -13,10 +13,9 @@ animation_list = {
     "arrow" : ['>', '>>', '>>>']
 }
 
-def loading_animation(stop_event, animation="spinner"):
+def loading_animation(stop_event, animation):
     idx = 0
     selected_animation = animation_list[animation]
-    max_length = max(len(frame) for frame in selected_animation)
 
     while stop_event.is_set():
         frame = selected_animation[idx]
@@ -26,6 +25,7 @@ def loading_animation(stop_event, animation="spinner"):
 
 def move_mouse(stop_event, interval):
     mouse = Controller()
+    interval = max(1, interval)
     tick = 4
 
     while stop_event.is_set():
