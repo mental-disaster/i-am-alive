@@ -1,6 +1,7 @@
 import time
-import argparse
+import platform
 import threading
+import subprocess
 import configparser
 from pynput.mouse import Controller
 
@@ -13,82 +14,98 @@ animation_list = {
     "arrow" : ['>', '>>', '>>>']
 }
 
-def loading_animation(stop_event, rest_event, animation):
+CYCLE = 0.25
+
+def loading_animation(working_event, rest_event, animation):
     idx = 0
     selected_animation = animation_list[animation]
     max_length = max(len(frame) for frame in selected_animation)
 
-    while stop_event.is_set():
+    while working_event.is_set():
         status = "Working" if not rest_event.is_set() else 'Resting'
         frame = selected_animation[idx]
         print(f"\r{status} {frame}"+ " " * (max_length - len(frame)), end='', flush=True)
         idx = (idx + 1) % len(selected_animation)
-        time.sleep(0.2)
+        time.sleep(CYCLE)
 
-def move_mouse(stop_event, rest_event, interval):
+def move_mouse(working_event, rest_event, interval):
     mouse = Controller()
     interval = max(1, interval)
+    cycle_count = 0
 
-    while True:
-        for _ in range(interval * 5):
-            if not stop_event.is_set():
-                return
-            time.sleep(0.2)
-
-        if not rest_event.is_set():
+    while working_event.is_set():
+        if not rest_event.is_set() and cycle_count >= interval:
+            cycle_count = 0
             mouse.move(1, 0)
             mouse.move(-1, 0)
 
-def scheduler(stop_event, rest_event, break_start, break_end, work_end):
-    break_start_hour_min = (break_start.tm_hour, break_start.tm_min) if break_start else ''
-    break_end_hour_min = (break_end.tm_hour, break_end.tm_min) if break_end else ''
-    work_end_hour_min = (work_end.tm_hour, work_end.tm_min) if work_end else ''
+        cycle_count += CYCLE
+        time.sleep(CYCLE)
 
-    while stop_event.is_set():
+def status_controller(working_event, rest_event, battery_safe, break_start, break_end, work_end):
+    break_start_hour_min = (break_start.tm_hour, break_start.tm_min)
+    break_end_hour_min = (break_end.tm_hour, break_end.tm_min)
+    work_end_hour_min = (work_end.tm_hour, work_end.tm_min)
+    last_battery_check = time.time()
+    battery_check_interval = 60
+
+    while working_event.is_set():
         current_time = time.localtime()
         current_hour_min = (current_time.tm_hour, current_time.tm_min)
 
         if work_end_hour_min and work_end_hour_min <= current_hour_min:
-            stop_event.clear()
-        elif break_start_hour_min and break_end_hour_min and break_start_hour_min <= current_hour_min <= break_end_hour_min:
-            rest_event.set()
-        else:
+            working_event.clear()
+            return
+        
+        if not rest_event.is_set():
+            if (break_start_hour_min <= current_hour_min <= break_end_hour_min) or\
+                (battery_safe and (time.time() - last_battery_check > battery_check_interval) and is_battery_mode()):
+                last_battery_check = time.time()
+                rest_event.set()
+        elif rest_event.is_set():
             rest_event.clear()
-        time.sleep(0.2)
 
-def stop_working(stop_event):
+        time.sleep(CYCLE)
+
+def is_battery_mode():
+    if platform.system() == 'Darwin':
+        power_mode = subprocess.run(['pmset', '-g', 'batt'], stdout=subprocess.PIPE, text=True).stdout
+        if  'Battery Power' in power_mode:
+            return True
+    return False
+
+def load_config(file_path):
+    config = configparser.ConfigParser()
+    try:
+        config.read(file_path)
+        animation = config.get('mode', 'animation', fallback='spinner')
+        battery_safe = config.getboolean('mode', 'battery_safe', fallback=True)
+        interval = config.getint('time', 'interval', fallback=10)
+        break_start = time.strptime(config.get('time', 'break_start', fallback="12:00"), "%H:%M")
+        break_end = time.strptime(config.get('time', 'break_end', fallback="13:00"), "%H:%M")
+        work_end = time.strptime(config.get('time', 'work_end', fallback="18:00"), "%H:%M")
+        return animation, battery_safe, interval, break_start, break_end, work_end
+    except (configparser.Error, ValueError) as e:
+        print(f"Error loading configuration: {e}. Using default values.")
+        return 'spinner', True, 10, time.strptime("12:00", "%H:%M"), time.strptime("13:00", "%H:%M"), time.strptime("18:00", "%H:%M")
+
+def stop_working(working_event):
     input("Press Enter to stop the program...\n")
-    stop_event.clear()
+    working_event.clear()
 
 if __name__ == "__main__":
-    arg_parser = argparse.ArgumentParser()
-    arg_parser.add_argument('--animation', help='Select working animation', default="spinner", choices=animation_list.keys())
-    arg_parser.add_argument('--interval', help='Mouse moving interval in seconds', type=int, default=10)
-    opt = arg_parser.parse_args()
-
-    config = configparser.ConfigParser()
-    config.read("config.ini")
-    try:
-        break_start = time.strptime(config["time"]["break_start"], "%H:%M")
-    except ValueError:
-        break_start = ''
-    try:
-        break_end = time.strptime(config["time"]["break_end"], "%H:%M")
-    except ValueError:
-        break_end = ''
-    try:
-        work_end = time.strptime(config["time"]["work_end"], "%H:%M")
-    except ValueError:
-        work_end = ''
+    animation, battery_safe, interval, break_start, break_end, work_end = load_config("config.ini")
 
     is_working = threading.Event()
     is_resting = threading.Event()
     is_working.set()
 
     activation_thread = threading.Thread(target=stop_working, args=(is_working,))
-    timer_thread = threading.Thread(target=scheduler, args=(is_working, is_resting, break_start, break_end, work_end,))
-    animation_thread = threading.Thread(target=loading_animation, args=(is_working, is_resting, opt.animation,))
-    mouse_thread = threading.Thread(target=move_mouse, args=(is_working, is_resting, opt.interval,))
+    timer_thread = threading.Thread(target=status_controller, args=(is_working, is_resting, battery_safe, break_start, break_end, work_end,))
+    animation_thread = threading.Thread(target=loading_animation, args=(is_working, is_resting, animation,))
+    mouse_thread = threading.Thread(target=move_mouse, args=(is_working, is_resting, interval,))
+    
+    activation_thread.daemon = True
 
     activation_thread.start()
     timer_thread.start()

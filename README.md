@@ -11,11 +11,10 @@ python 3.9
 
 python alive_mouse.py로 동작
 
-argument  
---animation {$ANIMATION_NAME} | 동작중 애니메이션 ['spinner', 'clock', 'ellipsis', 'pulsing', 'bounce', 'arrow'] 중 택 1  
---interval {$INTERVAL} | 마우스 동작 간격(초) int값 입력, 최소 1초
-
-config
-break_start | 쉬는 시간 시작시간, 쉬는 시간에는 마우스가 동작하지 않음
-break_end | 쉬는 시간 종료시간, 쉬는 시간에는 마우스가 동작하지 않음
-work_end | 강제 종료 시간, 단, 안전하게 프로그램을 종료하려면 enter키를 눌러 timer_thread를 종료해야함
+config  
+animation | 동작 애니메이션  
+battery_safe | 배터리 사용 중 동작 방지  현재 macos만 지원  
+interval | 마우스 동작 간격(초)  
+break_start | 쉬는 시간 시작시간, 쉬는 시간에는 마우스가 동작하지 않음  
+break_end | 쉬는 시간 종료시간, 쉬는 시간에는 마우스가 동작하지 않음  
+work_end | 강제 종료 시간
