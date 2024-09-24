@@ -11,6 +11,10 @@ python 3.9
 
 python alive_mouse.py로 동작
 
+enter 키를 누르면 종료  
+r + 숫자로 해당 초만큼 rest모드로 전환  
+ex) r100 - 100초 동안 rest모드로 전환  
+
 config  
 animation | 동작 애니메이션  
 battery_safe | 배터리 사용 중 동작 방지  현재 macos만 지원  

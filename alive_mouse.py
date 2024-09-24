@@ -59,7 +59,7 @@ def status_controller(working_event, rest_event, battery_safe, break_start, brea
             return
         
         if not rest_event.is_set():
-            if break_start_hour_min <= current_hour_min <= break_end_hour_min:
+            if break_start_hour_min <= current_hour_min < break_end_hour_min:
                 rest_event.set()
             elif battery_safe and (time.time() - last_battery_check > battery_check_interval) and is_battery_mode():
                 before_battery_mode = True
@@ -78,6 +78,13 @@ def is_battery_mode():
             return True
     return False
 
+def take_a_rest(rest_event, rest_time):
+    rest_event.set()
+    try:
+        time.sleep(int(rest_time))
+    finally:
+        rest_event.clear()
+
 def load_config(file_path):
     config = configparser.ConfigParser()
     try:
@@ -93,9 +100,15 @@ def load_config(file_path):
         print(f"Error loading configuration: {e}. Using default values.")
         return 'spinner', True, 10, time.strptime("12:00", "%H:%M"), time.strptime("13:00", "%H:%M"), time.strptime("18:00", "%H:%M")
 
-def stop_working(working_event):
-    input("Press Enter to stop the program...\n")
-    working_event.clear()
+def stop_working(working_event, rest_event):
+    while working_event.set:
+        user_input = input("Press Enter to stop the program...\n")
+        if not user_input:
+            working_event.clear()
+        elif user_input[0] == 'r':
+            rest_thread = threading.Thread(target=take_a_rest, args=(rest_event,user_input[1:]))
+            rest_thread.daemon = True
+            rest_thread.start()
 
 if __name__ == "__main__":
     animation, battery_safe, interval, break_start, break_end, work_end = load_config("config.ini")
@@ -104,7 +117,7 @@ if __name__ == "__main__":
     is_resting = threading.Event()
     is_working.set()
 
-    activation_thread = threading.Thread(target=stop_working, args=(is_working,))
+    activation_thread = threading.Thread(target=stop_working, args=(is_working,is_resting,))
     timer_thread = threading.Thread(target=status_controller, args=(is_working, is_resting, battery_safe, break_start, break_end, work_end,))
     animation_thread = threading.Thread(target=loading_animation, args=(is_working, is_resting, animation,))
     mouse_thread = threading.Thread(target=move_mouse, args=(is_working, is_resting, interval,))
