@@ -47,7 +47,8 @@ def status_controller(working_event, rest_event, battery_safe, break_start, brea
     break_end_hour_min = (break_end.tm_hour, break_end.tm_min)
     work_end_hour_min = (work_end.tm_hour, work_end.tm_min)
     last_battery_check = time.time()
-    battery_check_interval = 60
+    before_battery_mode = False
+    battery_check_interval = 30
 
     while working_event.is_set():
         current_time = time.localtime()
@@ -57,13 +58,16 @@ def status_controller(working_event, rest_event, battery_safe, break_start, brea
             working_event.clear()
             return
         
-        if (break_start_hour_min <= current_hour_min <= break_end_hour_min) or\
-            (battery_safe and (time.time() - last_battery_check > battery_check_interval) and is_battery_mode()):
-            if not rest_event.is_set():
+        if not rest_event.is_set():
+            if break_start_hour_min <= current_hour_min <= break_end_hour_min:
+                rest_event.set()
+            elif battery_safe and (time.time() - last_battery_check > battery_check_interval) and is_battery_mode():
+                before_battery_mode = True
                 last_battery_check = time.time()
                 rest_event.set()
-        elif rest_event.is_set():
-            rest_event.clear()
+        else:
+            if battery_safe and not is_battery_mode() and before_battery_mode:
+                rest_event.clear()
 
         time.sleep(CYCLE)
 
