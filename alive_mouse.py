@@ -108,6 +108,8 @@ def stop_working(working_event, rest_event):
         if not user_input:
             working_event.clear()
         elif user_input[0] == 'r':
+            if rest_event.is_set():
+                print("Already taking a rest...")
             rest_thread = threading.Thread(target=take_a_rest, args=(rest_event,user_input[1:]))
             rest_thread.daemon = True
             rest_thread.start()
